@@ -67,10 +67,8 @@ export async function getChunkFromBucket(key: string): Promise<Buffer> {
   );
   const stream = res.Body;
   if (!stream) throw new Error("Empty body from bucket");
-  // @ts-expect-error - Body is a ReadableStream in the browser / Node stream
   const chunks: Uint8Array[] = [];
-  // @ts-expect-error
-  for await (const chunk of stream) {
+  for await (const chunk of stream as AsyncIterable<Uint8Array>) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
