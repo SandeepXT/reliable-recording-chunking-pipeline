@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+
+# Environment — NEVER commit real secrets
+apps/server/.env
+apps/web/.env.local
+.env
+.env.*
+!.env.example
+!apps/server/.env.example
+!apps/web/.env.local.example
+
+# Turbo cache
+.turbo/
+
+# Misc
+.DS_Store
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript
+*.tsbuildinfo
