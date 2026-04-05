@@ -1,136 +1,77 @@
-# Recording Pipeline — Production Ready
+# Recording Pipeline
 
-A full-stack audio recording pipeline: browser → WAV chunks → MinIO → PostgreSQL → Whisper transcript.
+A production-grade audio recording pipeline with zero data loss. Records in 5-second WAV chunks, buffers to OPFS, uploads to S3-compatible storage, acknowledges to PostgreSQL, and transcribes via Whisper.
 
-## What's included
+## Architecture
 
-| Feature | Status |
-|---|---|
-| 16 kHz PCM WAV chunking (AudioWorklet) | ✅ |
-| OPFS durable local buffer | ✅ |
-| MinIO S3 chunk storage | ✅ |
-| PostgreSQL ack + reconcile | ✅ |
-| Whisper (whisper-1) rolling transcript | ✅ |
-| Bearer auth on all API routes | ✅ |
-| Per-IP rate limiting on upload | ✅ |
-| Body size guard (10 MB) | ✅ |
-| Production startup guard (no secret = exit) | ✅ |
-| Auth header forwarded from frontend | ✅ |
+The entire stack runs as a single **Next.js app on Vercel**:
+- `/app/api/*` — Route Handlers (formerly the separate Hono server)
+- `/app/recorder` — Recording UI
+- Storage: any S3-compatible bucket (Cloudflare R2, AWS S3)
+- Database: any hosted PostgreSQL (Neon, Supabase, Railway)
 
-## Stack
-
-- **Frontend**: Next.js 15, Tailwind CSS, shadcn/ui
-- **Backend**: Hono on Bun
-- **Storage**: MinIO (S3-compatible), PostgreSQL via Drizzle ORM
-- **Transcript**: OpenAI Whisper API (`whisper-1`)
-- **Monorepo**: npm workspaces + Turborepo
-
-## Prerequisites
-
-| Tool | Version | Why |
-|---|---|---|
-| Node.js | ≥ 20 | npm workspaces + Next.js |
-| Bun | ≥ 1.0 | API server runtime |
-| Docker Desktop | any | Postgres + MinIO |
-
-## Quick start
+## Local Development
 
 ```bash
-# 1. Install dependencies
 npm install
 
-# 2. Start Postgres + MinIO
+# Start local Postgres + MinIO (optional)
 npm run db:start
 
-# 3. Push schema to DB
+# Push schema
 npm run db:push
 
-# 4. Configure environment
-cp apps/server/.env apps/server/.env.local
-# Edit apps/server/.env — fill in API_SECRET and OPENAI_API_KEY
-
-# 5. Start everything
-npm run dev
-# Web → http://localhost:3001
-# API → http://localhost:3000
+# Start dev server at http://localhost:3001
+npm run dev:web
 ```
 
-## Environment variables
+## Deploying to Vercel
 
-### `apps/server/.env`
+### 1. Set up external services
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `CORS_ORIGIN` | ✅ | Frontend origin (e.g. `https://app.example.com`) |
-| `API_SECRET` | ✅ prod | 32+ char random string. Generate: `openssl rand -hex 32` |
-| `OPENAI_API_KEY` | optional | Enables Whisper transcription. Omit to skip. |
-| `BUCKET_ENDPOINT` | ✅ | MinIO host |
-| `BUCKET_PORT` | ✅ | MinIO port (default `9000`) |
-| `BUCKET_USE_SSL` | ✅ | `true` in production |
-| `BUCKET_ACCESS_KEY` | ✅ | MinIO access key |
-| `BUCKET_SECRET_KEY` | ✅ | MinIO secret key |
-| `BUCKET_NAME` | ✅ | Bucket name (default `recordings`) |
+**Database** — use one of:
+- [Neon](https://neon.tech) (free tier, serverless Postgres)
+- [Supabase](https://supabase.com)
+- [Railway](https://railway.app)
 
-### `apps/web/.env.local`
+**Object Storage** — use one of:
+- [Cloudflare R2](https://developers.cloudflare.com/r2/) (no egress fees, recommended)
+- [AWS S3](https://aws.amazon.com/s3/)
 
-| Variable | Required | Description |
-|---|---|---|
-| `NEXT_PUBLIC_SERVER_URL` | ✅ | Full URL to the API server |
-| `NEXT_PUBLIC_API_TOKEN` | prod | Same value as `API_SECRET` |
+### 2. Run database migrations
 
-## Auth
+```bash
+DATABASE_URL=your-production-url npm run db:push
+```
 
-All `/api/*` routes require `Authorization: Bearer <token>`.
+### 3. Deploy to Vercel
 
-- **Development**: leave `API_SECRET` empty → server bypasses auth with a warning.
-- **Production**: server exits at startup if `API_SECRET` is not set.
-- **Frontend**: set `NEXT_PUBLIC_API_TOKEN` to the same value; it's stored in `sessionStorage` and sent automatically.
+```bash
+npx vercel --prod
+```
 
-## Rate limits
+Or connect your GitHub repo in the Vercel dashboard. The `vercel.json` at the root handles the build config automatically.
 
-| Endpoint | Limit |
+### 4. Set environment variables in Vercel
+
+Go to **Project → Settings → Environment Variables** and add:
+
+| Variable | Description |
 |---|---|
-| `POST /api/chunks/upload` | 120 req/min per IP |
-| All other `/api/*` | 600 req/min per IP |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `API_SECRET` | Random 32+ char secret (`openssl rand -hex 32`) |
+| `BUCKET_ENDPOINT` | R2: `https://<id>.r2.cloudflarestorage.com` · S3: leave blank |
+| `BUCKET_REGION` | R2: `auto` · S3: e.g. `us-east-1` |
+| `BUCKET_ACCESS_KEY` | Bucket access key |
+| `BUCKET_SECRET_KEY` | Bucket secret key |
+| `BUCKET_NAME` | Bucket name (e.g. `recordings`) |
+| `OPENAI_API_KEY` | Optional — enables Whisper transcription |
+| `NEXT_PUBLIC_API_TOKEN` | Same value as `API_SECRET` — sent by the browser |
 
-Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `Retry-After`.
+### 5. Redeploy
 
-## Transcript
+After setting env vars, trigger a new deployment. The app will be live at your Vercel URL.
 
-Whisper transcription runs **asynchronously** after each chunk is stored in MinIO — it never blocks the upload response.
+## Environment Variables Reference
 
-- Chunk transcript: `chunks.transcript`, `chunks.transcript_confidence`, `chunks.transcript_status`
-- Recording transcript: `recordings.transcript` (assembled from all chunks in sequence)
-- API: `GET /api/recordings/:id/transcript` — returns full text + per-segment breakdown
-- Frontend: polls every 3 s and displays a rolling transcript panel in real time
-
-If `OPENAI_API_KEY` is not set, transcript columns are left as `null` and `transcript_status = 'skipped'`.
-
-## API reference
-
-```
-GET  /health                          — health check (no auth)
-POST /api/recordings                  — create recording session
-GET  /api/recordings                  — list recordings
-GET  /api/recordings/:id              — get single recording
-GET  /api/recordings/:id/transcript   — get rolling transcript
-PATCH /api/recordings/:id/complete    — mark complete
-
-POST /api/chunks/upload               — upload WAV chunk (rate limited)
-GET  /api/chunks                      — list chunks (paginated)
-GET  /api/chunks/stats                — aggregate stats
-
-GET  /api/reconcile                   — find chunks missing from bucket
-POST /api/reconcile/repair            — re-upload chunk from OPFS data
-```
-
-## Production deployment checklist
-
-- [ ] `API_SECRET` set via CI/CD secrets (not in `.env` file)
-- [ ] `OPENAI_API_KEY` set if transcription is needed
-- [ ] `BUCKET_USE_SSL=true` and real MinIO/S3 credentials
-- [ ] `CORS_ORIGIN` set to exact frontend domain (no trailing slash)
-- [ ] `NODE_ENV=production`
-- [ ] DB migrations run: `npm run db:migrate`
-- [ ] For multi-instance deployments: swap in-process rate limiter for Redis-backed store
+See `apps/web/.env.local.example` for local development setup.

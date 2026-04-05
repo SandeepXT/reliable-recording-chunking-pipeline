@@ -33,7 +33,7 @@ const PIPELINE_STEPS = [
   {
     icon: Cloud,
     title: "Bucket Upload",
-    description: "Chunks are uploaded to MinIO (S3-compatible) via the Hono API server running on Bun",
+    description: "Chunks are uploaded to S3-compatible storage (Cloudflare R2 / AWS S3) via Next.js API routes",
     color: "text-sky-500",
     bg: "bg-sky-500/10",
   },
@@ -87,7 +87,7 @@ export default function Home() {
         </h1>
         <p className="mt-3 max-w-xl text-base text-muted-foreground">
           A production-grade pipeline that ensures recording data stays accurate in all cases — no data loss, no silent failures.
-          Built with Next.js, Hono, Bun, Drizzle + PostgreSQL, MinIO, and Whisper.
+          Built with Next.js, Drizzle + PostgreSQL, S3-compatible storage, and Whisper.
         </p>
         <div className="mt-5 flex gap-3">
           <Link
@@ -97,15 +97,14 @@ export default function Home() {
             <Mic className="size-4" />
             Open Recorder
           </Link>
-          <a
-            href="http://localhost:3000"
+          <Link
+            href="/api/health"
             target="_blank"
-            rel="noopener noreferrer"
             className={cn(buttonVariants({ variant: "outline", size: "lg" }), "gap-2")}
           >
-            API Server
+            API Health
             <ArrowRight className="size-4" />
-          </a>
+          </Link>
         </div>
       </div>
 

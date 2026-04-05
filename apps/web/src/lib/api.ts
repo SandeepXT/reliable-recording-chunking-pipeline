@@ -1,23 +1,22 @@
 "use client";
 
-import { env } from "@my-better-t-app/env/web";
-
-const BASE = env.NEXT_PUBLIC_SERVER_URL;
-
 /**
- * Get the Bearer token from env or sessionStorage (set at login / app init).
- * In development with no API_SECRET, the server passes through without a token.
+ * API client — uses relative URLs so it works identically in dev and on Vercel.
+ * All /api/* routes are Next.js Route Handlers co-located in this same app.
  */
+
 function getAuthHeader(): Record<string, string> {
   const token =
     typeof window !== "undefined"
-      ? (sessionStorage.getItem("api_token") ?? process.env.NEXT_PUBLIC_API_TOKEN ?? "")
+      ? (sessionStorage.getItem("api_token") ??
+        process.env.NEXT_PUBLIC_API_TOKEN ??
+        "")
       : "";
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(path, {
     headers: {
       "Content-Type": "application/json",
       ...getAuthHeader(),
@@ -118,7 +117,7 @@ export async function getRecording(id: string): Promise<Recording> {
 export async function completeRecording(id: string): Promise<Recording> {
   const res = await apiFetch<{ ok: boolean; recording: Recording }>(
     `/api/recordings/${id}/complete`,
-    { method: "PATCH" },
+    { method: "PATCH" }
   );
   return res.recording;
 }
@@ -134,7 +133,7 @@ export async function uploadChunk(params: {
   recordingId?: string;
   sequenceNumber: number;
   durationSeconds: number;
-  data: string; // base64
+  data: string;
 }): Promise<{ ok: boolean; chunkId: string; bucketKey: string }> {
   return apiFetch("/api/chunks/upload", {
     method: "POST",
@@ -167,7 +166,7 @@ export async function repairChunk(chunkId: string, data: string): Promise<{ ok: 
 // ─── Health ───────────────────────────────────────────────────────────────────
 
 export async function checkHealth(): Promise<{ ok: boolean; ts: number }> {
-  return apiFetch<{ ok: boolean; ts: number }>("/health");
+  return apiFetch<{ ok: boolean; ts: number }>("/api/health");
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────

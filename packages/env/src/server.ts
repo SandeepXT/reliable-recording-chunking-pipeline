@@ -1,27 +1,22 @@
-import "dotenv/config";
-import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
-export const env = createEnv({
-  server: {
-    DATABASE_URL: z.string().min(1),
-    CORS_ORIGIN: z.url(),
-    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-    // Auth — required in production, optional (bypass) in dev
-    API_SECRET: z.string().min(32).optional(),
-    // Bucket (MinIO / S3)
-    BUCKET_ENDPOINT: z.string().default("localhost"),
-    BUCKET_PORT: z.coerce.number().default(9000),
-    BUCKET_USE_SSL: z
-      .string()
-      .default("false")
-      .transform((v) => v === "true"),
-    BUCKET_ACCESS_KEY: z.string().default("minioadmin"),
-    BUCKET_SECRET_KEY: z.string().default("minioadmin"),
-    BUCKET_NAME: z.string().default("recordings"),
-    // Transcript — OpenAI Whisper API key (optional: skips transcription if absent)
-    OPENAI_API_KEY: z.string().optional(),
-  },
-  runtimeEnv: process.env,
-  emptyStringAsUndefined: true,
-});
+// Simple typed env — no @t3-oss dependency needed for server routes in Next.js
+// Next.js automatically loads .env.local in dev; Vercel injects env vars in prod
+
+function requireEnv(key: string): string {
+  const val = process.env[key];
+  if (!val) throw new Error(`Missing required environment variable: ${key}`);
+  return val;
+}
+
+export const env = {
+  DATABASE_URL: process.env.DATABASE_URL ?? "",
+  NODE_ENV: (process.env.NODE_ENV ?? "development") as "development" | "production" | "test",
+  API_SECRET: process.env.API_SECRET,
+  BUCKET_ENDPOINT: process.env.BUCKET_ENDPOINT,
+  BUCKET_REGION: process.env.BUCKET_REGION ?? "auto",
+  BUCKET_ACCESS_KEY: process.env.BUCKET_ACCESS_KEY ?? "minioadmin",
+  BUCKET_SECRET_KEY: process.env.BUCKET_SECRET_KEY ?? "minioadmin",
+  BUCKET_NAME: process.env.BUCKET_NAME ?? "recordings",
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+} as const;
